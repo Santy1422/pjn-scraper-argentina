@@ -1,93 +1,131 @@
-# PJN Scraper Argentina
+# Betti — Legal Case Management for Argentine Courts
 
-**Tu estudio juridico en piloto automatico.** Sincroniza expedientes del Poder Judicial de la Nacion (PJN), recibe alertas de movimientos y genera escritos judiciales desde plantillas profesionales.
+**Automated case tracking for lawyers practicing in Argentina's federal judiciary (PJN).** Betti scrapes the PJN portal twice daily, tracks deadlines with judicial calendar awareness, generates court documents from templates, and sends WhatsApp summaries every morning.
+
+Built for a solo practitioner managing 200+ active cases across multiple jurisdictions.
 
 ---
 
-## Que hace?
+## Features
 
-- **Sincronizacion automatica** con el Portal PJN (expedientes, actuaciones, cedulas, despachos)
-- **Dashboard** con ultimos movimientos agrupados por expediente
-- **Generador de escritos** con 8+ plantillas judiciales (apelacion, revocatoria, contestacion, prueba, etc.) y auto-fill de datos del expediente
-- **Descarga de PDFs** de cedulas y despachos
-- **Busqueda rapida** por caratula, clave o dependencia (Cmd+K)
-- **Notas y tareas** por expediente
-- **Export a PDF** con formato judicial (margenes A4, Times New Roman)
-- **Multi-usuario** con credenciales PJN por cuenta
+- **Automated scraping** — Logs into the PJN portal via headless Chromium, syncs case lists (expedientes), court actions (actuaciones), notifications (cedulas), and rulings (despachos)
+- **Smart deadline tracking** — Auto-creates tasks from court events with deadlines calculated using business days, excluding judicial holidays and court recesses
+- **Document generator** — 10 pre-built legal templates (appeals, motions, briefs) with auto-injected case headers and lawyer signature
+- **PDF export** — Generates court-formatted PDFs (A4, Times New Roman, judicial margins)
+- **WhatsApp notifications** — Morning summary of overnight changes via Zavu API
+- **Real-time dashboard** — Cases by status, jurisdiction breakdown, weekly activity charts
+- **PWA** — Installable on mobile and desktop for quick access
+- **Full-text search** — Find any case by name, number, court, or party (Cmd+K)
 
-## Stack
+## Architecture
 
-| Componente | Tecnologia |
+```
+┌─────────────────────────────────────────────┐
+│                   Client                    │
+│         React 19 + Vite (SPA/PWA)          │
+└──────────────────┬──────────────────────────┘
+                   │ REST API
+┌──────────────────┴──────────────────────────┐
+│              Express Server                 │
+│  ┌────────┐  ┌────────┐  ┌───────────────┐ │
+│  │ Scraper│  │  Cron  │  │  Notifier     │ │
+│  │Playwright │ node-cron│  │  Zavu/WhatsApp│ │
+│  └────────┘  └────────┘  └───────────────┘ │
+│              SQLite (WAL mode)              │
+└─────────────────────────────────────────────┘
+```
+
+| Layer | Tech |
 |---|---|
-| Backend | Node.js + Express |
+| Frontend | React 19, Vite, Lucide icons |
+| Backend | Node.js, Express |
 | Scraping | Playwright (headless Chromium) |
-| Base de datos | SQLite (better-sqlite3, WAL mode) |
-| Frontend | React 19 + Vite |
-| PDF | Playwright PDF rendering |
-| Deploy | Docker / Railway |
+| Database | SQLite via better-sqlite3 (WAL mode) |
+| PDF generation | Playwright PDF renderer |
+| Notifications | Zavu WhatsApp API |
+| Scheduling | node-cron (2x daily, Mon-Fri) |
+| Deploy | Docker on Railway (persistent volume) |
 
-## Setup local
+## Quick Start
 
 ```bash
-# Clonar
-git clone https://github.com/tu-usuario/pjn-scraper-argentina.git
+git clone https://github.com/Santy1422/pjn-scraper-argentina.git
 cd pjn-scraper-argentina
 
-# Instalar dependencias
 npm install
 cd dashboard && npm install && npx vite build && cd ..
-
-# Instalar Chromium para Playwright
 npx playwright install chromium
 
-# Iniciar
 npm start
-# -> http://localhost:3000
+# → http://localhost:3000
 ```
 
-Al abrir por primera vez, crea tu cuenta. Despues ve a **Configuracion** e ingresa tu CUIL y password del Portal PJN.
+Create your account on first visit, then go to **Settings** and enter your PJN credentials (CUIL + password).
 
-## Deploy en Railway
+## Deploy (Railway)
 
-1. Crea un proyecto en [Railway](https://railway.app)
-2. Conecta tu repo de GitHub
-3. Agrega un **Volume** montado en `/data`
-4. Railway detecta el `Dockerfile` automaticamente
-5. Listo - la DB y PDFs persisten en el volumen
+1. Create a project on [Railway](https://railway.app) and connect this repo
+2. Add a **Volume** mounted at `/data`
+3. Set environment variables:
 
-**Variables de entorno** (se configuran automaticamente):
-- `PORT` - Railway lo asigna
-- `DATA_DIR=/data` - ya esta en el Dockerfile
+| Variable | Required | Description |
+|---|---|---|
+| `DATA_DIR` | Yes | `/data` (persistent volume) |
+| `ADMIN_EMAIL` | Optional | Auto-creates admin account on first run |
+| `ADMIN_PASSWORD` | Optional | Password for the auto-created account |
+| `PJN_USUARIO` | Optional | PJN portal CUIL (auto-configured) |
+| `PJN_PASSWORD` | Optional | PJN portal password (auto-configured) |
+| `ZAVU_API_KEY` | Optional | Zavu API key for WhatsApp notifications |
+| `ZAVU_SENDER_ID` | Optional | Zavu sender ID |
+| `NOTIFY_PHONE` | Optional | Phone number for WhatsApp alerts (E.164) |
 
-## Deploy frontend en Vercel (opcional)
+Railway detects the `Dockerfile` automatically. The scraper runs at 8:00 and 18:00 (Argentina time, Mon-Fri).
 
-Si queres el frontend separado:
+## Legal Templates
 
-```bash
-cd dashboard
-```
-
-1. Conecta la carpeta `dashboard/` a Vercel
-2. Agrega la variable `VITE_API_URL=https://tu-backend.railway.app`
-3. Deploy
-
-## Plantillas de escritos incluidas
-
-| Plantilla | Uso |
+| Template | Reference |
 |---|---|
-| Pedido de pronto despacho | Art. 167 CPCCN |
-| Recurso de apelacion | Arts. 242/244 CPCCN |
-| Contestacion de demanda | Art. 356 CPCCN |
-| Recurso de revocatoria | Art. 238 CPCCN |
-| Expresion de agravios | Art. 259 CPCCN |
-| Ofrecimiento de prueba | Art. 367 CPCCN |
-| Alegato | Art. 482 CPCCN |
-| Escrito generico | Formato libre |
+| Motion for expedited ruling | Art. 167 CPCCN |
+| Appeal | Arts. 242/244 CPCCN |
+| Answer to complaint | Art. 356 CPCCN |
+| Motion for reconsideration | Art. 238 CPCCN |
+| Reconsideration with subsidiary appeal | Art. 238 + 244 CPCCN |
+| Statement of grievances | Art. 259 CPCCN |
+| Evidence offering | Art. 367 CPCCN |
+| Closing argument | Art. 482 CPCCN |
+| Proof of standing | General practice |
+| Generic brief | Free format |
 
-## Licencia
+## Project Structure
+
+```
+├── server.js          # Express API (40+ endpoints)
+├── scraper.js         # Playwright scraper (login, cases, actions, PDFs)
+├── db.js              # SQLite schema, queries, judicial calendar
+├── cron.js            # Scheduled scraping (8:00 + 18:00 Mon-Fri)
+├── notifier.js        # WhatsApp notifications via Zavu
+├── Dockerfile         # Production build with Chromium deps
+├── railway.toml       # Railway deployment config
+└── dashboard/         # React SPA
+    ├── src/
+    │   ├── App.jsx            # Router, auth, PWA install
+    │   ├── api.js             # API client with token management
+    │   ├── components/
+    │   │   ├── Dashboard.jsx      # Overview with charts
+    │   │   ├── Expedientes.jsx    # Case list (table + mobile cards)
+    │   │   ├── ExpedienteDetalle.jsx  # Case detail + timeline
+    │   │   ├── GeneradorEscrito.jsx   # Document editor + templates
+    │   │   ├── Calendario.jsx     # Deadline calendar
+    │   │   ├── Alertas.jsx        # Cases requiring attention
+    │   │   ├── Actividad.jsx      # Recent activity feed
+    │   │   ├── Configuracion.jsx  # Settings + PJN credentials
+    │   │   └── ...
+    │   └── index.css          # Full design system
+    └── public/
+        ├── manifest.json      # PWA manifest
+        └── sw.js              # Service worker
+```
+
+## License
 
 MIT
-
----
-
-Hecho con cafe y mate en Argentina.

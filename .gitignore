@@ -3,11 +3,14 @@ dashboard/node_modules/
 dashboard/dist/
 pdfs/
 escritos/
+data/
 *.db
 *.db-wal
 *.db-shm
-data/
 *.png
 .env
+.env.*
 explore*.js
 fix-explore.js
+debug-*.png
+.DS_Store

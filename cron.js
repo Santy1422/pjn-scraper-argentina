@@ -27,4 +27,4 @@ cron.schedule(
   { timezone: "America/Argentina/Buenos_Aires" }
 );
 
-console.log("[CRON] Programado: 8:00 y 18:00 (Lun-Vie, hora Argentina) + WhatsApp 18:00");
+console.log("[CRON] Programado: 8:00 (scrape + WhatsApp) y 18:00 (scrape) — Lun-Vie, hora Argentina");
