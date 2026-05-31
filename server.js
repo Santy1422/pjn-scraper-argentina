@@ -742,18 +742,15 @@ app.post("/api/generar-pdf", async (req, res) => {
   const { html, titulo, expediente } = req.body;
   if (!html) return res.status(400).json({ error: "HTML requerido" });
 
-  // Build header from expediente data
+  // Build legal header: lawyer info + case data (always the same format)
   const headerHtml = expediente ? `
-    <div class="header">
-      <div>${expediente.clave || ''}</div>
-      <div>${expediente.caratula || ''}</div>
-      <div>${expediente.dependencia || ''}</div>
-    </div>` : '';
+    <p><b>BETTINA PAOLA SOBERON, T&ordm; 108 F&ordm; 100 C.P.A.C.F., DNI. 21.861.652, CUIT. 27-218616521-1, Responsable Inscripta, abogada PATROCINANTE DEL ACTOR, ratificando el domicilio procesal de la demanda de inicio, Capital Federal TEL 2115-0945 Cel 11-33251791; domicilio electr&oacute;nico 27218616521-1, en los autos CARATULADOS &ldquo;${(expediente.caratula || '').replace(/"/g, '&quot;')}&rdquo; EXPTE N&ordm; ${expediente.clave || ''}, que tramita ante ${expediente.dependencia || ''}, ante V.S. me presento y digo:</b></p>
+    ` : '';
 
   // Firma always at the bottom
   const firmaHtml = `
     <div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-    <div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>`;
+    <div class="firma"><br><br>________________________<br>Firma<br>BETTINA PAOLA SOBERON<br>Abogada — T&ordm; 108 F&ordm; 100 C.P.A.C.F.</div>`;
 
   let browser;
   try {
