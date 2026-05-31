@@ -1,5 +1,6 @@
 const { db } = require("./db");
 
+const ZAVU_API_URL = "https://api.zavu.dev";
 const ZAVU_API_KEY = process.env.ZAVU_API_KEY;
 const ZAVU_SENDER_ID = process.env.ZAVU_SENDER_ID;
 const NOTIFY_PHONE = process.env.NOTIFY_PHONE || "541133251791";
@@ -12,17 +13,19 @@ async function sendWhatsApp(phone, message) {
   }
 
   try {
-    const res = await fetch("https://api.zavu.com/v1/messages", {
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${ZAVU_API_KEY}`,
+    };
+    if (ZAVU_SENDER_ID) headers["Zavu-Sender"] = ZAVU_SENDER_ID;
+
+    const res = await fetch(`${ZAVU_API_URL}/v1/messages`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${ZAVU_API_KEY}`,
-      },
+      headers,
       body: JSON.stringify({
-        sender_id: ZAVU_SENDER_ID,
-        to: phone,
-        type: "text",
-        text: { body: message },
+        to: phone.startsWith("+") ? phone : `+${phone}`,
+        text: message,
+        channel: "whatsapp",
       }),
     });
 
@@ -31,7 +34,7 @@ async function sendWhatsApp(phone, message) {
       console.log(`[WHATSAPP] Mensaje enviado a ${phone}`);
       return true;
     } else {
-      console.error("[WHATSAPP] Error:", data);
+      console.error("[WHATSAPP] Error:", res.status, data);
       return false;
     }
   } catch (err) {
@@ -43,7 +46,6 @@ async function sendWhatsApp(phone, message) {
 function buildSyncMessage(result) {
   const { eventosNuevos, expedientesActualizados, actuacionesNuevas, errores } = result;
 
-  // Get today's movements from DB
   const hoy = new Date().toISOString().slice(0, 10);
   const movimientos = db.prepare(`
     SELECT a.tipo, a.detalle, a.fecha, e.clave, e.caratula
@@ -54,7 +56,6 @@ function buildSyncMessage(result) {
     LIMIT 10
   `).all(hoy);
 
-  // Get alerts (EN DESPACHO / GIRO)
   const alertas = db.prepare(`
     SELECT clave, situacion, caratula
     FROM expedientes
@@ -98,7 +99,6 @@ function buildSyncMessage(result) {
 async function notifyAfterSync(result) {
   if (!ZAVU_API_KEY) return;
 
-  // Only notify if there's something to report
   if (result.eventosNuevos === 0 && result.actuacionesNuevas === 0 && result.errores === 0) {
     console.log("[WHATSAPP] Sin novedades, no se envía notificación");
     return;
