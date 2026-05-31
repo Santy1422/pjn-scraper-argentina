@@ -804,6 +804,33 @@ app.get("*", (req, res) => {
 // START
 // ============================================================
 
+// Auto-seed: create user + PJN config from env vars on first run
+function seedFromEnv() {
+  const count = db.prepare("SELECT COUNT(*) as c FROM usuarios").get().c;
+  if (count > 0) return;
+
+  const email = process.env.ADMIN_EMAIL;
+  const pass = process.env.ADMIN_PASSWORD;
+  const nombre = process.env.ADMIN_NOMBRE || 'Admin';
+  const pjnUser = process.env.PJN_USUARIO;
+  const pjnPass = process.env.PJN_PASSWORD;
+
+  if (!email || !pass) return;
+
+  const hash = hashPassword(pass);
+  const result = q.insertUsuario.run(email.toLowerCase(), nombre, hash);
+  const userId = result.lastInsertRowid;
+  const token = generateToken();
+  q.updateToken.run(token, userId);
+
+  if (pjnUser) q.setConfig.run(userId, 'pjn_usuario', pjnUser);
+  if (pjnPass) q.setConfig.run(userId, 'pjn_password', pjnPass);
+
+  console.log(`[SEED] Usuario creado: ${email} | PJN: ${pjnUser ? 'configurado' : 'sin configurar'}`);
+}
+
+seedFromEnv();
+
 app.listen(PORT, () => {
   console.log(`Betti API: http://localhost:${PORT}`);
   require("./cron");
