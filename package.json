@@ -1,0 +1,23 @@
+{
+  "name": "pjn-scraper-argentina",
+  "version": "1.0.0",
+  "description": "Sistema de gestion judicial PJN Argentina - Scraping, expedientes, escritos y mas",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "cd dashboard && npm install && npx vite build",
+    "postinstall": "npx playwright install chromium --with-deps || true",
+    "scrape": "node scraper.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.0",
+    "multer": "^2.1.1",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.49.0"
+  }
+}
