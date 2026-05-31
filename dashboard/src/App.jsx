@@ -51,8 +51,7 @@ export default function App() {
   // Check auth on load
   useEffect(() => {
     auth.status().then(status => {
-      if (status.needsSetup) setAuthState('setup');
-      else if (status.authenticated) { setUser(status.user); setAuthState('authenticated'); }
+      if (status.authenticated) { setUser(status.user); setAuthState('authenticated'); }
       else setAuthState('login');
     }).catch(() => setAuthState('login'));
   }, []);
@@ -129,11 +128,11 @@ export default function App() {
     );
   }
 
-  // Login/Setup
-  if (authState === 'login' || authState === 'setup') {
+  // Login
+  if (authState === 'login') {
     return (
       <>
-        <Login needsSetup={authState === 'setup'} onAuth={handleAuth} />
+        <Login onAuth={handleAuth} />
         <ToastContainer toasts={toasts} remove={removeToast} />
       </>
     );

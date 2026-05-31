@@ -43,7 +43,7 @@ app.use(express.static(dashboardPath));
 
 function authMiddleware(req, res, next) {
   // Public routes
-  if (req.path === '/api/auth/login' || req.path === '/api/auth/setup' || req.path === '/api/auth/status') {
+  if (req.path === '/api/auth/login' || req.path === '/api/auth/status') {
     return next();
   }
   // Skip auth for non-API routes (static files, SPA)
@@ -72,24 +72,6 @@ app.get("/api/auth/status", (req, res) => {
   let user = null;
   if (token) user = q.getUsuarioByToken.get(token);
   res.json({ needsSetup: count === 0, authenticated: !!user, user });
-});
-
-// Initial setup - create first user
-app.post("/api/auth/setup", (req, res) => {
-  const count = db.prepare("SELECT COUNT(*) as c FROM usuarios").get().c;
-  if (count > 0) return res.status(400).json({ error: 'Ya existe un usuario. Usa login.' });
-
-  const { email, nombre, password } = req.body;
-  if (!email?.trim() || !password || password.length < 4) {
-    return res.status(400).json({ error: 'Email y password (min 4 chars) requeridos' });
-  }
-
-  const hash = hashPassword(password);
-  const result = q.insertUsuario.run(email.trim().toLowerCase(), nombre?.trim() || email.split('@')[0], hash);
-  const token = generateToken();
-  q.updateToken.run(token, result.lastInsertRowid);
-  const user = q.getUsuarioById.get(result.lastInsertRowid);
-  res.json({ ok: true, token, user });
 });
 
 // Login

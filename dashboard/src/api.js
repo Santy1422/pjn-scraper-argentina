@@ -62,7 +62,6 @@ async function del(path) {
 
 export const auth = {
   status: () => fetch(`${BASE}/auth/status`, { headers: authHeaders() }).then(r => r.json()),
-  setup: (data) => post('/auth/setup', data),
   login: (data) => post('/auth/login', data),
   logout: () => post('/auth/logout'),
   me: () => get('/auth/me'),

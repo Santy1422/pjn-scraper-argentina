@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Scale, LogIn, UserPlus } from 'lucide-react';
+import { Scale, LogIn } from 'lucide-react';
 import { auth } from '../api';
 
-export default function Login({ needsSetup, onAuth }) {
-  const [mode, setMode] = useState(needsSetup ? 'setup' : 'login');
+export default function Login({ onAuth }) {
   const [email, setEmail] = useState('');
-  const [nombre, setNombre] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,12 +13,7 @@ export default function Login({ needsSetup, onAuth }) {
     setError('');
     setLoading(true);
     try {
-      let result;
-      if (mode === 'setup') {
-        result = await auth.setup({ email, nombre, password });
-      } else {
-        result = await auth.login({ email, password });
-      }
+      const result = await auth.login({ email, password });
       if (result.error) {
         setError(result.error);
       } else if (result.token) {
@@ -44,25 +37,9 @@ export default function Login({ needsSetup, onAuth }) {
           </div>
         </div>
 
-        <h2 className="login-title">
-          {mode === 'setup' ? 'Crear cuenta' : 'Iniciar sesion'}
-        </h2>
-        {mode === 'setup' && (
-          <p className="login-subtitle">Primera vez? Crea tu usuario para empezar.</p>
-        )}
+        <h2 className="login-title">Iniciar sesion</h2>
 
         <form onSubmit={handleSubmit} className="login-form">
-          {mode === 'setup' && (
-            <div className="form-field">
-              <label>Nombre</label>
-              <input
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                placeholder="Tu nombre"
-                autoComplete="name"
-              />
-            </div>
-          )}
           <div className="form-field">
             <label>Email</label>
             <input
@@ -84,23 +61,17 @@ export default function Login({ needsSetup, onAuth }) {
               placeholder="••••••••"
               required
               minLength={4}
-              autoComplete={mode === 'setup' ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
             />
           </div>
 
           {error && <div className="login-error">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={loading}>
-            {mode === 'setup' ? <UserPlus size={16} /> : <LogIn size={16} />}
-            {loading ? 'Cargando...' : mode === 'setup' ? 'Crear cuenta' : 'Ingresar'}
+            <LogIn size={16} />
+            {loading ? 'Cargando...' : 'Ingresar'}
           </button>
         </form>
-
-        {!needsSetup && mode === 'setup' && (
-          <button className="login-switch" onClick={() => setMode('login')}>
-            Ya tengo cuenta
-          </button>
-        )}
       </div>
     </div>
   );
