@@ -318,19 +318,20 @@ async function scrapeActuaciones(page) {
   // Scrapear actuaciones: primero los que tuvieron eventos recientes,
   // luego rotar por los demás que no se actualizaron hace tiempo
   const expedientesConEventos = db.prepare(`
-    SELECT DISTINCT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
-    FROM expedientes e
-    JOIN eventos ev ON ev.clave_expediente = e.clave OR REPLACE(ev.clave_expediente,' 0',' ') = REPLACE(e.clave,' 0',' ')
-    WHERE ev.fecha_creacion > (strftime('%s','now','-7 days') * 1000)
-    UNION
-    SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
-    FROM expedientes e
-    WHERE e.situacion IN ('EN DESPACHO', 'GIRO')
-    UNION
-    SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
-    FROM expedientes e
-    WHERE e.id NOT IN (SELECT DISTINCT expediente_id FROM actuaciones WHERE created_at > datetime('now', '-14 days'))
-    ORDER BY RANDOM()
+    SELECT * FROM (
+      SELECT DISTINCT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
+      FROM expedientes e
+      JOIN eventos ev ON ev.clave_expediente = e.clave OR REPLACE(ev.clave_expediente,' 0',' ') = REPLACE(e.clave,' 0',' ')
+      WHERE ev.fecha_creacion > (strftime('%s','now','-7 days') * 1000)
+      UNION
+      SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
+      FROM expedientes e
+      WHERE e.situacion IN ('EN DESPACHO', 'GIRO')
+      UNION
+      SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
+      FROM expedientes e
+      WHERE e.id NOT IN (SELECT DISTINCT expediente_id FROM actuaciones WHERE created_at > datetime('now', '-14 days'))
+    ) ORDER BY RANDOM()
     LIMIT 40
   `).all();
 
