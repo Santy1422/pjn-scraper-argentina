@@ -1,0 +1,10 @@
+node_modules
+dashboard/node_modules
+dashboard/dist
+*.db
+*.db-wal
+*.db-shm
+pdfs
+escritos
+.env
+.git
