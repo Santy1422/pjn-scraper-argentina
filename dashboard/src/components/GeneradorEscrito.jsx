@@ -7,13 +7,11 @@ const PLANTILLAS = [
     tipo: 'pronto_despacho',
     nombre: 'Pedido de pronto despacho',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>SOLICITA PRONTO DESPACHO</h1>
 <p>Señor Juez:</p>
 <p><b>${exp.caratula_actor || '[NOMBRE LETRADO/A]'}</b>, letrado/a apoderado/a de la parte actora, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), constituyendo domicilio electrónico, a V.S. respetuosamente digo:</p>
 <p>Que habiendo transcurrido un plazo razonable sin que se haya dictado resolución, vengo por el presente a solicitar se provea el pronto despacho de las actuaciones pendientes, conforme lo dispuesto por el art. 167 del CPCCN.</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -21,7 +19,7 @@ const PLANTILLAS = [
     tipo: 'recurso',
     nombre: 'Recurso de apelación',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>INTERPONE RECURSO DE APELACION</h1>
 <p>Señor Juez:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, letrado/a apoderado/a de la parte [ACTORA/DEMANDADA], en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), a V.S. respetuosamente digo:</p>
@@ -34,8 +32,6 @@ const PLANTILLAS = [
 <p>1. Se tenga por interpuesto el recurso de apelación en legal tiempo y forma.</p>
 <p>2. Se conceda el recurso con efecto [suspensivo/devolutivo].</p>
 <p>3. Se eleven los autos al Superior para su resolución.</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -43,7 +39,7 @@ const PLANTILLAS = [
     tipo: 'contestacion',
     nombre: 'Contestación de demanda',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>CONTESTA DEMANDA</h1>
 <p>Señor Juez:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, letrado/a apoderado/a de la parte demandada, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), constituyendo domicilio procesal en [DOMICILIO] y domicilio electrónico, a V.S. respetuosamente digo:</p>
@@ -61,8 +57,6 @@ const PLANTILLAS = [
 <p>Por todo lo expuesto, solicito a V.S.:</p>
 <p>1. Se tenga por contestada la demanda en legal tiempo y forma.</p>
 <p>2. Se rechace la demanda en todas sus partes, con costas.</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -70,7 +64,7 @@ const PLANTILLAS = [
     tipo: 'revocatoria',
     nombre: 'Recurso de revocatoria',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>INTERPONE RECURSO DE REVOCATORIA</h1>
 <p>Señor Juez:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), a V.S. respetuosamente digo:</p>
@@ -80,8 +74,6 @@ const PLANTILLAS = [
 <p>[Explicar por qué la providencia es errónea o injusta]</p>
 <h2>III. PETITORIO</h2>
 <p>Por lo expuesto, solicito se revoque la providencia recurrida y se provea conforme a derecho.</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -89,7 +81,7 @@ const PLANTILLAS = [
     tipo: 'recurso',
     nombre: 'Expresión de agravios',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>EXPRESA AGRAVIOS</h1>
 <p>Excma. Cámara:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), a V.E. respetuosamente digo:</p>
@@ -101,8 +93,6 @@ const PLANTILLAS = [
 <p>[Desarrollar]</p>
 <h2>IV. PETITORIO</h2>
 <p>Por lo expuesto, solicito se revoque la sentencia apelada y se haga lugar a [lo solicitado], con costas.</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -110,7 +100,7 @@ const PLANTILLAS = [
     tipo: 'prueba',
     nombre: 'Ofrecimiento de prueba',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>OFRECE PRUEBA</h1>
 <p>Señor Juez:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), a V.S. respetuosamente digo:</p>
@@ -124,8 +114,6 @@ const PLANTILLAS = [
 <p>2. [NOMBRE], DNI [N°], domicilio [DOMICILIO]</p>
 <h2>IV. PERICIAL</h2>
 <p>Se designe perito [médico/contador/calígrafo] de oficio a fin de que dictamine sobre [PUNTOS DE PERICIA].</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -133,7 +121,7 @@ const PLANTILLAS = [
     tipo: 'generico',
     nombre: 'Escrito genérico',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>[TITULO DEL ESCRITO]</h1>
 <p>Señor Juez:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), a V.S. respetuosamente digo:</p>
@@ -143,8 +131,6 @@ const PLANTILLAS = [
 <p>[Desarrollar]</p>
 <h2>III. PETITORIO</h2>
 <p>Por lo expuesto, solicito a V.S. [lo que se solicita].</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
   {
@@ -152,7 +138,7 @@ const PLANTILLAS = [
     tipo: 'alegato',
     nombre: 'Alegato',
     html: (exp) => `
-<div class="header">Expediente: ${exp.clave}<br>${exp.dependencia || ''}</div>
+
 <h1>ALEGA SOBRE EL MERITO DE LA PRUEBA</h1>
 <p>Señor Juez:</p>
 <p><b>[NOMBRE LETRADO/A]</b>, en los autos caratulados <b>"${exp.caratula}"</b> (Expte. N° ${exp.clave}), a V.S. respetuosamente digo:</p>
@@ -162,8 +148,6 @@ const PLANTILLAS = [
 <p>[Valoración y argumentación]</p>
 <h2>III. CONCLUSIONES</h2>
 <p>[Conclusiones finales]</p>
-<div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
-<div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>
 `,
   },
 ];
@@ -200,17 +184,18 @@ export default function GeneradorEscrito({ expediente, borrador, onBack, onSaved
     if (!titulo.trim()) return;
     setSaving(true);
     const contenido_html = editorRef.current?.innerHTML || '';
+    const token = localStorage.getItem('betti_token');
     try {
       if (borrador?.id) {
         await fetch(`/api/borradores/${borrador.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ titulo, tipo, contenido_html }),
         });
       } else {
         const res = await fetch(`/api/expedientes/${expediente.id}/borradores`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ titulo, tipo, contenido_html }),
         });
         const saved = await res.json();
@@ -234,12 +219,14 @@ export default function GeneradorEscrito({ expediente, borrador, onBack, onSaved
     if (!editorRef.current) return;
     setDownloading(true);
     try {
+      const token = localStorage.getItem('betti_token');
       const res = await fetch('/api/generar-pdf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           html: editorRef.current.innerHTML,
           titulo: titulo || 'escrito',
+          expediente: { clave: expediente.clave, caratula: expediente.caratula, dependencia: expediente.dependencia },
         }),
       });
       if (!res.ok) throw new Error('Error generando PDF');

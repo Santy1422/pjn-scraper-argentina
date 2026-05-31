@@ -736,8 +736,21 @@ app.delete("/api/borradores/:id", (req, res) => {
 
 // Generate PDF from HTML content
 app.post("/api/generar-pdf", async (req, res) => {
-  const { html, titulo } = req.body;
+  const { html, titulo, expediente } = req.body;
   if (!html) return res.status(400).json({ error: "HTML requerido" });
+
+  // Build header from expediente data
+  const headerHtml = expediente ? `
+    <div class="header">
+      <div>${expediente.clave || ''}</div>
+      <div>${expediente.caratula || ''}</div>
+      <div>${expediente.dependencia || ''}</div>
+    </div>` : '';
+
+  // Firma always at the bottom
+  const firmaHtml = `
+    <div class="proveer">PROVEER DE CONFORMIDAD<br>SERA JUSTICIA</div>
+    <div class="firma"><br><br>________________________<br>Firma<br>Letrado/a Apoderado/a</div>`;
 
   let browser;
   try {
@@ -754,11 +767,11 @@ app.post("/api/generar-pdf", async (req, res) => {
   h1 { font-size: 14pt; text-align: center; margin-bottom: 24pt; }
   h2 { font-size: 13pt; margin-top: 18pt; }
   p { text-indent: 2em; margin-bottom: 6pt; text-align: justify; }
-  .header { text-align: right; margin-bottom: 24pt; font-size: 11pt; }
+  .header { text-align: right; margin-bottom: 24pt; font-size: 11pt; color: #333; }
   .firma { margin-top: 48pt; text-align: center; }
   .proveer { margin-top: 24pt; text-align: center; font-weight: bold; font-style: italic; }
 </style>
-</head><body>${html}</body></html>`;
+</head><body>${headerHtml}${html}${firmaHtml}</body></html>`;
 
     await page.setContent(fullHtml, { waitUntil: 'networkidle' });
     const pdf = await page.pdf({ format: 'A4', margin: { top: '5cm', bottom: '2.5cm', left: '5cm', right: '2cm' }, printBackground: true });
