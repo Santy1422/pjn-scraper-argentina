@@ -651,6 +651,9 @@ app.get("/api/reglas-plazos", (req, res) => {
 app.post("/api/scrape", async (req, res) => {
   try {
     const result = await scrapeAll("MANUAL");
+    // Send WhatsApp notification if there are changes
+    const { notifyAfterSync } = require("./notifier");
+    notifyAfterSync(result).catch(err => console.error("[NOTIFY]", err));
     res.json({ ok: true, ...result });
   } catch (err) {
     const needsConfig = err.message.includes('no configuradas') || err.message.includes('No hay usuarios');

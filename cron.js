@@ -1,5 +1,6 @@
 const cron = require("node-cron");
 const { scrapeAll } = require("./scraper");
+const { notifyAfterSync } = require("./notifier");
 
 // 2 veces por dia: 8:00 y 18:00 (Lun-Vie, hora Argentina)
 cron.schedule(
@@ -11,13 +12,19 @@ cron.schedule(
   { timezone: "America/Argentina/Buenos_Aires" }
 );
 
+// Vespertino: scrape + WhatsApp notification
 cron.schedule(
   "0 18 * * 1-5",
-  () => {
+  async () => {
     console.log(`[CRON] Scraping vespertino - ${new Date().toISOString()}`);
-    scrapeAll("CRON").catch((err) => console.error("[CRON ERROR]", err));
+    try {
+      const result = await scrapeAll("CRON");
+      await notifyAfterSync(result);
+    } catch (err) {
+      console.error("[CRON ERROR]", err);
+    }
   },
   { timezone: "America/Argentina/Buenos_Aires" }
 );
 
-console.log("[CRON] Programado: 8:00 y 18:00 (Lun-Vie, hora Argentina)");
+console.log("[CRON] Programado: 8:00 y 18:00 (Lun-Vie, hora Argentina) + WhatsApp 18:00");
