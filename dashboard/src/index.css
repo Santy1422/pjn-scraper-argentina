@@ -472,6 +472,8 @@ tr.clickable-row:active td{background:var(--bg4)}
   .feed-mov-date{min-width:58px;font-size:10px}
   .feed-mov-tipo{min-width:55px;font-size:9px}
   .feed-mov-det{min-width:0;width:100%}
+  .exp-table-desktop{display:none}
+  .exp-cards-mobile{display:block}
   .stats-grid{grid-template-columns:1fr 1fr}
   .stat-card .value{font-size:22px}
   .detail-header .clave{font-size:18px;flex-wrap:wrap}
@@ -556,6 +558,18 @@ tr.clickable-row:active td{background:var(--bg4)}
   .gen-header h2{font-size:14px}
   .gen-cat-title{font-size:11px}
 }
+
+/* Expedientes: desktop table / mobile cards toggle */
+.exp-cards-mobile{display:none}
+
+.exp-mobile-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow)}
+.exp-mobile-card:hover{border-color:var(--accent);box-shadow:0 4px 12px rgba(79,70,229,.06)}
+.exp-mobile-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.exp-mobile-clave{font-size:13px;font-weight:600;color:var(--accent2)}
+.exp-mobile-caratula{font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px}
+.exp-mobile-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.exp-mobile-dep{font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.exp-mobile-fecha{font-size:11px;color:var(--text3);flex-shrink:0}
 
 /* Detail layout: main + sidebar */
 .detail-layout{display:flex;gap:0;margin-top:12px}

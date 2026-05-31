@@ -63,7 +63,6 @@ export default function Expedientes({ setPage, openExpediente }) {
 
   const hasFilters = filtros.q || filtros.jurisdiccion || filtros.situacion || filtros.anio;
 
-  // Keyboard: Enter to search, Escape to clear
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape' && hasFilters) {
@@ -124,8 +123,6 @@ export default function Expedientes({ setPage, openExpediente }) {
               <div className="skeleton skeleton-bar" style={{ width: 120 }} />
               <div className="skeleton skeleton-bar" style={{ flex: 1 }} />
               <div className="skeleton skeleton-bar" style={{ width: 80 }} />
-              <div className="skeleton skeleton-bar" style={{ width: 140 }} />
-              <div className="skeleton skeleton-bar" style={{ width: 80 }} />
             </div>
           ))}
         </div>
@@ -134,7 +131,9 @@ export default function Expedientes({ setPage, openExpediente }) {
           <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
             {sorted.length} expedientes {hasFilters ? '(filtrado)' : ''}
           </p>
-          <div className="panel">
+
+          {/* Desktop table */}
+          <div className="panel exp-table-desktop">
             <div className="table-wrap">
               <table>
                 <thead>
@@ -167,6 +166,23 @@ export default function Expedientes({ setPage, openExpediente }) {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="exp-cards-mobile">
+            {sorted.map(exp => (
+              <div key={exp.id} className="exp-mobile-card" onClick={() => openExpediente(exp.id)}>
+                <div className="exp-mobile-top">
+                  <span className="exp-mobile-clave">{exp.clave}</span>
+                  <span className={badgeClass(exp.situacion)}>{exp.situacion || '—'}</span>
+                </div>
+                <div className="exp-mobile-caratula">{exp.caratula || '—'}</div>
+                <div className="exp-mobile-bottom">
+                  <span className="exp-mobile-dep">{exp.dependencia || '—'}</span>
+                  <span className="exp-mobile-fecha">{exp.ultima_actuacion || '—'}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
