@@ -37,6 +37,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [badges, setBadges] = useState({});
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   const toast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -47,6 +49,33 @@ export default function App() {
   const removeToast = useCallback((id) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
+
+  // PWA install prompt
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem('pwa-dismissed');
+    if (dismissed) return;
+    function handleBIP(e) {
+      e.preventDefault();
+      setInstallPrompt(e);
+      setShowInstallBanner(true);
+    }
+    window.addEventListener('beforeinstallprompt', handleBIP);
+    return () => window.removeEventListener('beforeinstallprompt', handleBIP);
+  }, []);
+
+  async function handleInstall() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') toast('App instalada', 'success');
+    setShowInstallBanner(false);
+    setInstallPrompt(null);
+  }
+
+  function dismissInstall() {
+    setShowInstallBanner(false);
+    sessionStorage.setItem('pwa-dismissed', '1');
+  }
 
   // Check auth on load
   useEffect(() => {
@@ -173,6 +202,15 @@ export default function App() {
           />
         )}
         <ToastContainer toasts={toasts} remove={removeToast} />
+        {showInstallBanner && (
+          <div className="install-banner">
+            <span>Instala Betti en tu dispositivo para acceso rapido</span>
+            <div className="install-banner-actions">
+              <button className="btn btn-sm" onClick={dismissInstall}>Ahora no</button>
+              <button className="btn btn-sm btn-primary" onClick={handleInstall}>Instalar</button>
+            </div>
+          </div>
+        )}
       </div>
     </ToastCtx.Provider>
   );
