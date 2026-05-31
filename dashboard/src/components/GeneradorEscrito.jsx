@@ -203,6 +203,7 @@ export default function GeneradorEscrito({ expediente, borrador, onBack, onSaved
   const [showPlantillas, setShowPlantillas] = useState(!borrador);
   const [downloading, setDownloading] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const [pendingHtml, setPendingHtml] = useState(null);
 
   useEffect(() => {
     if (borrador?.contenido_html && editorRef.current) {
@@ -210,9 +211,17 @@ export default function GeneradorEscrito({ expediente, borrador, onBack, onSaved
     }
   }, [borrador]);
 
+  // Apply pending HTML when editor mounts after plantilla selection
+  useEffect(() => {
+    if (pendingHtml && editorRef.current) {
+      editorRef.current.innerHTML = pendingHtml;
+      setPendingHtml(null);
+    }
+  }, [pendingHtml, showPlantillas]);
+
   function usarPlantilla(plantilla) {
     const html = plantilla.html(expediente);
-    if (editorRef.current) editorRef.current.innerHTML = html;
+    setPendingHtml(html);
     setTitulo(plantilla.nombre + ' — ' + expediente.clave);
     setTipo(plantilla.tipo);
     setShowPlantillas(false);
