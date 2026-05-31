@@ -31,7 +31,9 @@ async function post(path, body) {
   }
   const res = await fetch(`${BASE}${path}`, opts);
   if (res.status === 401) { window.dispatchEvent(new Event('betti:unauthorized')); throw new Error('No autorizado'); }
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) return { error: data.error || `Error ${res.status}` };
+  return data;
 }
 
 async function put(path, body) {

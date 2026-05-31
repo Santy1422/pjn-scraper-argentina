@@ -28,8 +28,9 @@ const upload = multer({
 // CORS for dev
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
@@ -107,7 +108,7 @@ app.post("/api/auth/change-password", (req, res) => {
 
   const full = q.getUsuarioByEmail.get(req.user.email);
   if (!verifyPassword(current_password, full.password_hash)) {
-    return res.status(401).json({ error: 'Password actual incorrecta' });
+    return res.status(400).json({ error: 'Password actual incorrecta' });
   }
 
   q.updatePassword.run(hashPassword(new_password), req.user.id);
