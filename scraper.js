@@ -22,7 +22,19 @@ if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR);
 // ============================================================
 
 async function loginYObtenerContexto() {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--single-process',
+      '--memory-pressure-off',
+      '--js-flags=--max-old-space-size=256',
+    ],
+  });
   const context = await browser.newContext({
     viewport: { width: 1400, height: 1000 },
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -314,7 +326,7 @@ async function scrapeExpedientes(page) {
 // scrapear sus actuaciones desde el SCW
 // ============================================================
 
-async function scrapeActuaciones(page) {
+async function scrapeActuaciones(_ignoredPage) {
   // Scrapear actuaciones: primero los que tuvieron eventos recientes,
   // luego rotar por los demás que no se actualizaron hace tiempo
   const expedientesConEventos = db.prepare(`
@@ -332,7 +344,7 @@ async function scrapeActuaciones(page) {
       FROM expedientes e
       WHERE e.id NOT IN (SELECT DISTINCT expediente_id FROM actuaciones WHERE created_at > datetime('now', '-14 days'))
     ) ORDER BY RANDOM()
-    LIMIT 40
+    LIMIT 20
   `).all();
 
   if (expedientesConEventos.length === 0) {
@@ -343,134 +355,152 @@ async function scrapeActuaciones(page) {
   console.log(`[ACTUACIONES] Scrapeando ${expedientesConEventos.length} expedientes con actividad reciente...`);
   let totalNuevas = 0;
 
-  for (const exp of expedientesConEventos) {
+  // Process in batches of 5 with a fresh browser each batch to avoid OOM
+  const BATCH_SIZE = 5;
+  for (let batchStart = 0; batchStart < expedientesConEventos.length; batchStart += BATCH_SIZE) {
+    const batch = expedientesConEventos.slice(batchStart, batchStart + BATCH_SIZE);
+    let batchBrowser;
     try {
-      // Ir a la lista y buscar el expediente
-      await page.goto(
-        "https://scw.pjn.gov.ar/scw/consultaListaRelacionados.seam",
-        { waitUntil: "networkidle", timeout: 30000 }
-      );
-      await page.waitForTimeout(2000);
+      const auth = await loginYObtenerContexto();
+      batchBrowser = auth.browser;
+      const page = auth.page;
 
-      // Buscar el link del expediente en la tabla
-      const expLink = page.locator(`td:has-text("${exp.clave}") ~ td a:has-text("visualizar")`).first();
+      for (const exp of batch) {
+        try {
+          // Ir a la lista y buscar el expediente
+          await page.goto(
+            "https://scw.pjn.gov.ar/scw/consultaListaRelacionados.seam",
+            { waitUntil: "networkidle", timeout: 30000 }
+          );
+          await page.waitForTimeout(2000);
 
-      if (!await expLink.isVisible().catch(() => false)) {
-        // No está en la primera página, intentar ir directo via URL de novedad
-        const evento = db.prepare(
-          "SELECT link_url FROM eventos WHERE clave_expediente = ? ORDER BY fecha_creacion DESC LIMIT 1"
-        ).get(exp.clave);
+          // Buscar el link del expediente en la tabla
+          const expLink = page.locator(`td:has-text("${exp.clave}") ~ td a:has-text("visualizar")`).first();
 
-        if (evento?.link_url) {
-          await page.goto(`https://scw.pjn.gov.ar/scw${evento.link_url}`, {
-            waitUntil: "networkidle",
-            timeout: 30000,
-          });
-          await page.waitForTimeout(3000);
-        } else {
-          continue;
-        }
-      } else {
-        await expLink.click();
-        await page.waitForLoadState("networkidle");
-        await page.waitForTimeout(3000);
-      }
+          if (!await expLink.isVisible().catch(() => false)) {
+            const evento = db.prepare(
+              "SELECT link_url FROM eventos WHERE clave_expediente = ? ORDER BY fecha_creacion DESC LIMIT 1"
+            ).get(exp.clave);
 
-      // Verificar que estamos en la vista de expediente
-      const actionTable = await page.$("#expediente\\:action-table");
-      if (!actionTable) {
-        console.log(`[ACTUACIONES] ${exp.clave}: sin tabla de actuaciones`);
-        continue;
-      }
-
-      // Click "Ver Todos" para ver todas las actuaciones
-      const verTodos = page.locator('text="Ver Todos"').first();
-      if (await verTodos.isVisible().catch(() => false)) {
-        await verTodos.click();
-        await page.waitForLoadState("networkidle");
-        await page.waitForTimeout(2000);
-      }
-
-      // Extraer actuaciones
-      const actuaciones = await page.evaluate(() => {
-        const rows = document.querySelectorAll("#expediente\\:action-table tr");
-        const items = [];
-        rows.forEach((tr, idx) => {
-          if (idx === 0) return;
-          const cells = tr.querySelectorAll("td");
-          if (cells.length < 5) return;
-
-          const linkDescarga = tr.querySelector('a[href*="viewer.seam"][href*="download=true"]');
-          const linkVer = tr.querySelector('a[href*="viewer.seam"]:not([href*="download"])');
-
-          items.push({
-            oficina: cells[1]?.innerText?.replace("Oficina:", "").trim() || null,
-            fecha: cells[2]?.innerText?.replace("Fecha:", "").trim() || null,
-            tipo: cells[3]?.innerText?.replace("Tipo actuacion:", "").trim() || null,
-            detalle: cells[4]?.innerText?.replace("Detalle:", "").trim() || null,
-            fojas: cells[5]?.innerText?.trim() || null,
-            urlDescarga: linkDescarga?.href || null,
-            urlVer: linkVer?.href || null,
-          });
-        });
-        return items;
-      });
-
-      // También extraer intervinientes si existe la tab
-      const tabIntervinientes = page.locator('text="Intervinientes"').first();
-      if (await tabIntervinientes.isVisible().catch(() => false)) {
-        await tabIntervinientes.click();
-        await page.waitForTimeout(2000);
-
-        const partes = await page.evaluate(() => {
-          const items = [];
-          const rows = document.querySelectorAll("[id*='interviniente'] tr, [id*='Interviniente'] tr");
-          rows.forEach(tr => {
-            const cells = tr.querySelectorAll("td");
-            if (cells.length >= 2) {
-              items.push({
-                tipo: cells[0]?.innerText?.trim(),
-                nombre: cells[1]?.innerText?.trim(),
+            if (evento?.link_url) {
+              await page.goto(`https://scw.pjn.gov.ar/scw${evento.link_url}`, {
+                waitUntil: "networkidle",
+                timeout: 30000,
               });
+              await page.waitForTimeout(3000);
+            } else {
+              continue;
             }
+          } else {
+            await expLink.click();
+            await page.waitForLoadState("networkidle");
+            await page.waitForTimeout(3000);
+          }
+
+          // Verificar que estamos en la vista de expediente
+          const actionTable = await page.$("#expediente\\:action-table");
+          if (!actionTable) {
+            console.log(`[ACTUACIONES] ${exp.clave}: sin tabla de actuaciones`);
+            continue;
+          }
+
+          // Click "Ver Todos" para ver todas las actuaciones
+          const verTodos = page.locator('text="Ver Todos"').first();
+          if (await verTodos.isVisible().catch(() => false)) {
+            await verTodos.click();
+            await page.waitForLoadState("networkidle");
+            await page.waitForTimeout(2000);
+          }
+
+          // Extraer actuaciones
+          const actuaciones = await page.evaluate(() => {
+            const rows = document.querySelectorAll("#expediente\\:action-table tr");
+            const items = [];
+            rows.forEach((tr, idx) => {
+              if (idx === 0) return;
+              const cells = tr.querySelectorAll("td");
+              if (cells.length < 5) return;
+
+              const linkDescarga = tr.querySelector('a[href*="viewer.seam"][href*="download=true"]');
+              const linkVer = tr.querySelector('a[href*="viewer.seam"]:not([href*="download"])');
+
+              items.push({
+                oficina: cells[1]?.innerText?.replace("Oficina:", "").trim() || null,
+                fecha: cells[2]?.innerText?.replace("Fecha:", "").trim() || null,
+                tipo: cells[3]?.innerText?.replace("Tipo actuacion:", "").trim() || null,
+                detalle: cells[4]?.innerText?.replace("Detalle:", "").trim() || null,
+                fojas: cells[5]?.innerText?.trim() || null,
+                urlDescarga: linkDescarga?.href || null,
+                urlVer: linkVer?.href || null,
+              });
+            });
+            return items;
           });
-          // Fallback: buscar en el body
-          if (items.length === 0) {
-            const panel = document.querySelector("[id*='interviniente'], [id*='Interviniente']");
-            if (panel) {
-              items.push({ tipo: "RAW", nombre: panel.innerText.trim().substring(0, 500) });
+
+          // También extraer intervinientes si existe la tab
+          const tabIntervinientes = page.locator('text="Intervinientes"').first();
+          if (await tabIntervinientes.isVisible().catch(() => false)) {
+            await tabIntervinientes.click();
+            await page.waitForTimeout(2000);
+
+            const partes = await page.evaluate(() => {
+              const items = [];
+              const rows = document.querySelectorAll("[id*='interviniente'] tr, [id*='Interviniente'] tr");
+              rows.forEach(tr => {
+                const cells = tr.querySelectorAll("td");
+                if (cells.length >= 2) {
+                  items.push({
+                    tipo: cells[0]?.innerText?.trim(),
+                    nombre: cells[1]?.innerText?.trim(),
+                  });
+                }
+              });
+              if (items.length === 0) {
+                const panel = document.querySelector("[id*='interviniente'], [id*='Interviniente']");
+                if (panel) {
+                  items.push({ tipo: "RAW", nombre: panel.innerText.trim().substring(0, 500) });
+                }
+              }
+              return items;
+            });
+
+            if (partes.length > 0) {
+              db.prepare("DELETE FROM partes WHERE expediente_id = ?").run(exp.id);
+              for (const p of partes) {
+                if (p.nombre) {
+                  q.insertParte.run(exp.id, p.tipo, p.nombre, null, null);
+                }
+              }
             }
           }
-          return items;
-        });
 
-        // Guardar partes
-        if (partes.length > 0) {
-          db.prepare("DELETE FROM partes WHERE expediente_id = ?").run(exp.id);
-          for (const p of partes) {
-            if (p.nombre) {
-              q.insertParte.run(exp.id, p.tipo, p.nombre, null, null);
-            }
+          // Guardar actuaciones
+          let nuevasEsteExp = 0;
+          for (const act of actuaciones) {
+            const hash = hashActuacion(exp.id, act.fecha, act.tipo, act.oficina, act.detalle);
+            const result = q.insertActuacion.run(
+              exp.id, act.oficina, act.fecha, fechaToISO(act.fecha),
+              act.tipo, act.detalle, act.fojas, act.urlDescarga, act.urlVer, hash
+            );
+            if (result.changes > 0) nuevasEsteExp++;
+          }
+          totalNuevas += nuevasEsteExp;
+          console.log(`[ACTUACIONES] ${exp.clave}: ${actuaciones.length} total, ${nuevasEsteExp} nuevas`);
+
+          await page.waitForTimeout(1500 + Math.random() * 1000);
+        } catch (err) {
+          console.error(`[ACTUACIONES] Error ${exp.clave}:`, err.message);
+          // If browser died, break inner loop to start fresh batch
+          if (err.message.includes('Target page') || err.message.includes('browser has been closed')) {
+            console.log(`[ACTUACIONES] Browser crashed, restarting for next batch...`);
+            break;
           }
         }
       }
-
-      // Guardar actuaciones
-      let nuevasEsteExp = 0;
-      for (const act of actuaciones) {
-        const hash = hashActuacion(exp.id, act.fecha, act.tipo, act.oficina, act.detalle);
-        const result = q.insertActuacion.run(
-          exp.id, act.oficina, act.fecha, fechaToISO(act.fecha),
-          act.tipo, act.detalle, act.fojas, act.urlDescarga, act.urlVer, hash
-        );
-        if (result.changes > 0) nuevasEsteExp++;
-      }
-      totalNuevas += nuevasEsteExp;
-      console.log(`[ACTUACIONES] ${exp.clave}: ${actuaciones.length} total, ${nuevasEsteExp} nuevas`);
-
-      await page.waitForTimeout(1500 + Math.random() * 1000);
     } catch (err) {
-      console.error(`[ACTUACIONES] Error ${exp.clave}:`, err.message);
+      console.error(`[ACTUACIONES] Batch login error:`, err.message);
+    } finally {
+      if (batchBrowser) await batchBrowser.close().catch(() => {});
     }
   }
 
@@ -546,34 +576,47 @@ async function scrapeAll(tipo = "MANUAL") {
   let errores = 0;
   const detalles = [];
 
-  let browser;
   try {
-    const auth = await loginYObtenerContexto();
-    browser = auth.browser;
+    // Phase 1: Eventos + Expedientes with one browser
+    let token;
+    {
+      let browser;
+      try {
+        const auth = await loginYObtenerContexto();
+        browser = auth.browser;
+        token = auth.token;
 
-    // 1. Eventos via API
-    try {
-      eventosNuevos = await scrapeEventos(auth.page, auth.token);
-      detalles.push({ paso: "eventos", ok: true, nuevos: eventosNuevos });
-    } catch (err) {
-      errores++;
-      detalles.push({ paso: "eventos", ok: false, error: err.message });
-      console.error("[ERROR] Eventos:", err.message);
+        // 1. Eventos via API
+        try {
+          eventosNuevos = await scrapeEventos(auth.page, auth.token);
+          detalles.push({ paso: "eventos", ok: true, nuevos: eventosNuevos });
+        } catch (err) {
+          errores++;
+          detalles.push({ paso: "eventos", ok: false, error: err.message });
+          console.error("[ERROR] Eventos:", err.message);
+        }
+
+        // 2. Lista completa de expedientes (212+)
+        try {
+          expedientesActualizados = await scrapeExpedientes(auth.page);
+          detalles.push({ paso: "expedientes", ok: true, total: expedientesActualizados });
+        } catch (err) {
+          errores++;
+          detalles.push({ paso: "expedientes", ok: false, error: err.message });
+          console.error("[ERROR] Expedientes:", err.message);
+        }
+      } catch (err) {
+        errores++;
+        detalles.push({ paso: "login", ok: false, error: err.message });
+        console.error("[ERROR] Login:", err.message);
+      } finally {
+        if (browser) await browser.close().catch(() => {});
+      }
     }
 
-    // 2. Lista completa de expedientes (212+)
+    // Phase 2: Actuaciones - manages its own browsers in batches
     try {
-      expedientesActualizados = await scrapeExpedientes(auth.page);
-      detalles.push({ paso: "expedientes", ok: true, total: expedientesActualizados });
-    } catch (err) {
-      errores++;
-      detalles.push({ paso: "expedientes", ok: false, error: err.message });
-      console.error("[ERROR] Expedientes:", err.message);
-    }
-
-    // 3. Actuaciones de expedientes con actividad reciente
-    try {
-      actuacionesNuevas = await scrapeActuaciones(auth.page);
+      actuacionesNuevas = await scrapeActuaciones(null);
       detalles.push({ paso: "actuaciones", ok: true, nuevas: actuacionesNuevas });
     } catch (err) {
       errores++;
@@ -581,21 +624,26 @@ async function scrapeAll(tipo = "MANUAL") {
       console.error("[ERROR] Actuaciones:", err.message);
     }
 
-    // 4. Descargar PDFs pendientes
-    try {
-      pdfsDescargados = await descargarPDFs(auth.page, auth.token);
-      detalles.push({ paso: "pdfs", ok: true, descargados: pdfsDescargados });
-    } catch (err) {
-      errores++;
-      detalles.push({ paso: "pdfs", ok: false, error: err.message });
-      console.error("[ERROR] PDFs:", err.message);
+    // Phase 3: PDFs with a fresh browser
+    {
+      let browser;
+      try {
+        const auth = await loginYObtenerContexto();
+        browser = auth.browser;
+        pdfsDescargados = await descargarPDFs(auth.page, auth.token);
+        detalles.push({ paso: "pdfs", ok: true, descargados: pdfsDescargados });
+      } catch (err) {
+        errores++;
+        detalles.push({ paso: "pdfs", ok: false, error: err.message });
+        console.error("[ERROR] PDFs:", err.message);
+      } finally {
+        if (browser) await browser.close().catch(() => {});
+      }
     }
   } catch (err) {
     errores++;
-    detalles.push({ paso: "login", ok: false, error: err.message });
-    console.error("[ERROR] Login:", err.message);
-  } finally {
-    if (browser) await browser.close();
+    detalles.push({ paso: "general", ok: false, error: err.message });
+    console.error("[ERROR] General:", err.message);
   }
 
   const duracion = Date.now() - startTime;
