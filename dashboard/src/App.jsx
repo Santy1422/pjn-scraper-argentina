@@ -34,6 +34,7 @@ export default function App() {
   const [page, setPage] = useState('dashboard');
   const [detailId, setDetailId] = useState(null);
   const [scraping, setScraping] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [badges, setBadges] = useState({});
@@ -123,6 +124,7 @@ export default function App() {
         setPage('configuracion');
       } else if (result.ok) {
         toast('Sincronizacion completada', 'success');
+        setRefreshKey(k => k + 1); // refrescar home con los datos nuevos
       } else {
         toast('Error: ' + (result.error || 'desconocido'), 'error');
       }
@@ -169,7 +171,7 @@ export default function App() {
 
   function renderPage() {
     switch (page) {
-      case 'dashboard': return <Dashboard setPage={setPage} openExpediente={openExpediente} />;
+      case 'dashboard': return <Dashboard key={refreshKey} setPage={setPage} openExpediente={openExpediente} />;
       case 'expedientes': return <Expedientes setPage={setPage} openExpediente={openExpediente} />;
       case 'detalle': return <ExpedienteDetalle id={detailId} setPage={setPage} openExpediente={openExpediente} />;
       case 'actividad': return <Actividad setPage={setPage} openExpediente={openExpediente} />;

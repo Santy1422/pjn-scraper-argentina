@@ -326,26 +326,31 @@ async function scrapeExpedientes(page) {
 // scrapear sus actuaciones desde el SCW
 // ============================================================
 
-async function scrapeActuaciones(_ignoredPage) {
-  // Scrapear actuaciones: primero los que tuvieron eventos recientes,
-  // luego rotar por los demás que no se actualizaron hace tiempo
+async function scrapeActuaciones(_ignoredPage, limit = 20) {
+  // Scrapear actuaciones por prioridad (NO al azar, para no dejar afuera
+  // expedientes con actividad reciente):
+  //   1. eventos recientes (7 días)
+  //   2. EN DESPACHO / GIRO
+  //   3. rotación: los que no se actualizaron hace +14 días
   const expedientesConEventos = db.prepare(`
-    SELECT * FROM (
-      SELECT DISTINCT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
+    SELECT id, clave, numero, anio, jurisdiccion_codigo FROM (
+      SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM eventos ev
+            WHERE (ev.clave_expediente = e.clave OR REPLACE(ev.clave_expediente,' 0',' ') = REPLACE(e.clave,' 0',' '))
+              AND ev.fecha_creacion > (strftime('%s','now','-7 days') * 1000)
+          ) THEN 0
+          WHEN e.situacion IN ('EN DESPACHO', 'GIRO') THEN 1
+          WHEN e.id NOT IN (SELECT DISTINCT expediente_id FROM actuaciones WHERE created_at > datetime('now', '-14 days')) THEN 2
+          ELSE 99
+        END AS prioridad
       FROM expedientes e
-      JOIN eventos ev ON ev.clave_expediente = e.clave OR REPLACE(ev.clave_expediente,' 0',' ') = REPLACE(e.clave,' 0',' ')
-      WHERE ev.fecha_creacion > (strftime('%s','now','-7 days') * 1000)
-      UNION
-      SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
-      FROM expedientes e
-      WHERE e.situacion IN ('EN DESPACHO', 'GIRO')
-      UNION
-      SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo
-      FROM expedientes e
-      WHERE e.id NOT IN (SELECT DISTINCT expediente_id FROM actuaciones WHERE created_at > datetime('now', '-14 days'))
-    ) ORDER BY RANDOM()
-    LIMIT 20
-  `).all();
+    )
+    WHERE prioridad < 99
+    ORDER BY prioridad ASC, RANDOM()
+    LIMIT ?
+  `).all(limit);
 
   if (expedientesConEventos.length === 0) {
     console.log("[ACTUACIONES] Sin expedientes con actividad reciente");
@@ -614,9 +619,11 @@ async function scrapeAll(tipo = "MANUAL") {
       }
     }
 
-    // Phase 2: Actuaciones - manages its own browsers in batches
+    // Phase 2: Actuaciones - manages its own browsers in batches.
+    // Sync manual trae mucho más (el usuario está esperando); el cron rota liviano.
     try {
-      actuacionesNuevas = await scrapeActuaciones(null);
+      const limitActuaciones = tipo === "MANUAL" ? 80 : 20;
+      actuacionesNuevas = await scrapeActuaciones(null, limitActuaciones);
       detalles.push({ paso: "actuaciones", ok: true, nuevas: actuacionesNuevas });
     } catch (err) {
       errores++;
