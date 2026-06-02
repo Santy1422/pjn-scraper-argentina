@@ -333,7 +333,7 @@ async function scrapeActuaciones(_ignoredPage, limit = 20) {
   //   2. EN DESPACHO / GIRO
   //   3. rotación: los que no se actualizaron hace +14 días
   const expedientesConEventos = db.prepare(`
-    SELECT id, clave, numero, anio, jurisdiccion_codigo FROM (
+    SELECT id, clave, numero, anio, jurisdiccion_codigo, prioridad FROM (
       SELECT e.id, e.clave, e.numero, e.anio, e.jurisdiccion_codigo,
         CASE
           WHEN EXISTS (
