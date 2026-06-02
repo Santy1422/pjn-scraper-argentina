@@ -17,7 +17,7 @@ export default function Dashboard({ setPage, openExpediente }) {
 
   useEffect(() => {
     api.dashboard().then(setData);
-    api.actuacionesRecientes(40).then(setRecientes);
+    api.actuacionesRecientes(100).then(setRecientes);
   }, []);
 
   // Group recientes by expediente
@@ -97,7 +97,7 @@ export default function Dashboard({ setPage, openExpediente }) {
 
       {grouped && grouped.length > 0 ? (
         <div className="dash-feed">
-          {grouped.slice(0, 15).map(exp => (
+          {grouped.slice(0, 40).map(exp => (
             <div key={exp.expediente_id} className="feed-card" onClick={() => openExpediente(exp.expediente_id)}>
               <div className="feed-top">
                 <span className="feed-clave">{exp.clave}</span>
@@ -107,7 +107,7 @@ export default function Dashboard({ setPage, openExpediente }) {
               <div className="feed-caratula">{exp.caratula}</div>
               {exp.dependencia && <div className="feed-dep">{exp.dependencia}</div>}
               <div className="feed-movs">
-                {exp.movimientos.slice(0, 4).map((m, j) => (
+                {exp.movimientos.slice(0, 6).map((m, j) => (
                   <div key={j} className="feed-mov">
                     <span className="feed-mov-date">{m.fecha}</span>
                     <span className={`feed-mov-tipo ${m.tipo?.toLowerCase().includes('despacho') ? 'despacho' : m.tipo?.toLowerCase().includes('firma') ? 'firma' : ''}`}>{m.tipo}</span>
@@ -115,8 +115,8 @@ export default function Dashboard({ setPage, openExpediente }) {
                     {m.fojas && <span className="feed-mov-fojas">fs.{m.fojas}</span>}
                   </div>
                 ))}
-                {exp.movimientos.length > 4 && (
-                  <div className="feed-mov-more">+{exp.movimientos.length - 4} mas</div>
+                {exp.movimientos.length > 6 && (
+                  <div className="feed-mov-more">+{exp.movimientos.length - 6} mas</div>
                 )}
               </div>
             </div>
