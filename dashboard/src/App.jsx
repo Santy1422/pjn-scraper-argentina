@@ -116,21 +116,51 @@ export default function App() {
 
   async function handleScrape() {
     setScraping(true);
-    toast('Sincronizando con PJN...', 'info');
     try {
       const result = await api.scrape();
       if (result.needsConfig) {
         toast('Configura tus credenciales PJN primero', 'error');
         setPage('configuracion');
-      } else if (result.ok) {
-        toast('Sincronizacion completada', 'success');
-        setRefreshKey(k => k + 1); // refrescar home con los datos nuevos
-      } else {
-        toast('Error: ' + (result.error || 'desconocido'), 'error');
+        setScraping(false);
+        return;
       }
+      if (!result.ok) {
+        toast('Error: ' + (result.error || 'desconocido'), 'error');
+        setScraping(false);
+        return;
+      }
+      if (result.started === false && result.running) {
+        toast('Ya hay una sincronizacion en curso...', 'info');
+      } else {
+        toast('Sincronizando con PJN (puede tardar unos minutos)...', 'info');
+      }
+      // El scrape corre en background: esperamos a que termine haciendo polling
+      await pollSync();
     } catch (e) {
       toast('Error: ' + e.message, 'error');
+      setScraping(false);
     }
+  }
+
+  async function pollSync() {
+    const MAX_MS = 12 * 60 * 1000; // 12 min de margen
+    const start = Date.now();
+    while (Date.now() - start < MAX_MS) {
+      await new Promise(r => setTimeout(r, 4000));
+      let s;
+      try { s = await api.syncStatus(); } catch { continue; }
+      if (!s.running) {
+        if (s.lastError) {
+          toast('Error en la sincronizacion: ' + s.lastError, 'error');
+        } else {
+          toast('Sincronizacion completada', 'success');
+          setRefreshKey(k => k + 1); // refrescar home con los datos nuevos
+        }
+        setScraping(false);
+        return;
+      }
+    }
+    toast('La sincronizacion sigue corriendo en segundo plano', 'info');
     setScraping(false);
   }
 

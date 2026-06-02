@@ -572,7 +572,16 @@ async function descargarPDFs(page, token, limit = 50) {
 // MAIN
 // ============================================================
 
+// Lock compartido: evita que el botón manual y el cron corran a la vez
+let scrapeRunning = false;
+function isScraping() { return scrapeRunning; }
+
 async function scrapeAll(tipo = "MANUAL") {
+  if (scrapeRunning) {
+    console.log("[SCRAPE] Ya hay un scrape en curso — se omite esta corrida");
+    return { skipped: true, eventosNuevos: 0, expedientesActualizados: 0, actuacionesNuevas: 0, pdfsDescargados: 0, errores: 0 };
+  }
+  scrapeRunning = true;
   const startTime = Date.now();
   let eventosNuevos = 0;
   let expedientesActualizados = 0;
@@ -651,6 +660,9 @@ async function scrapeAll(tipo = "MANUAL") {
     errores++;
     detalles.push({ paso: "general", ok: false, error: err.message });
     console.error("[ERROR] General:", err.message);
+  } finally {
+    // Liberar el lock apenas terminan las fases (aunque falle el log)
+    scrapeRunning = false;
   }
 
   const duracion = Date.now() - startTime;
@@ -671,4 +683,4 @@ if (require.main === module) {
   scrapeAll("MANUAL").then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { scrapeAll };
+module.exports = { scrapeAll, getCredentials, isScraping };

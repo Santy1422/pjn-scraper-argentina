@@ -3,11 +3,14 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const { db, q, calcularVencimiento, hashPassword, verifyPassword, generateToken } = require("./db");
-const { scrapeAll } = require("./scraper");
+const { scrapeAll, getCredentials, isScraping } = require("./scraper");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
+
+// Estado del scrape manual (corre en background para no cortar por timeout HTTP)
+let scrapeState = { running: false, startedAt: null, finishedAt: null, lastResult: null, lastError: null };
 
 // Multer for escrito uploads
 const DATA_DIR = process.env.DATA_DIR || __dirname;
@@ -477,7 +480,12 @@ app.delete("/api/notas/:id", (req, res) => {
 // Última sincronización
 app.get("/api/sync-status", (req, res) => {
   const last = q.ultimoLog.get();
-  res.json(last || { timestamp: null });
+  res.json({
+    ...(last || { timestamp: null }),
+    running: scrapeState.running || isScraping(),
+    startedAt: scrapeState.startedAt,
+    lastError: scrapeState.lastError,
+  });
 });
 
 // ============================================================
@@ -652,17 +660,39 @@ app.get("/api/reglas-plazos", (req, res) => {
 });
 
 // Scrape manual
-app.post("/api/scrape", async (req, res) => {
+app.post("/api/scrape", (req, res) => {
+  // Si ya hay un scrape en curso (manual o cron), no lanzar otro
+  if (scrapeState.running || isScraping()) {
+    return res.json({ ok: true, started: false, running: true });
+  }
+  // Validar credenciales al instante para devolver needsConfig sin esperar
   try {
-    const result = await scrapeAll("MANUAL");
-    // Send WhatsApp notification if there are changes
-    const { notifyAfterSync } = require("./notifier");
-    notifyAfterSync(result).catch(err => console.error("[NOTIFY]", err));
-    res.json({ ok: true, ...result });
+    getCredentials();
   } catch (err) {
     const needsConfig = err.message.includes('no configuradas') || err.message.includes('No hay usuarios');
-    res.status(needsConfig ? 400 : 500).json({ ok: false, error: err.message, needsConfig });
+    return res.status(needsConfig ? 400 : 500).json({ ok: false, error: err.message, needsConfig });
   }
+
+  // Lanzar el scrape en background (igual que el cron) y responder enseguida.
+  // El scrape completo tarda varios minutos: si lo esperáramos acá, el request
+  // HTTP se cortaría por timeout antes de terminar.
+  scrapeState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, lastResult: null, lastError: null };
+  res.json({ ok: true, started: true, running: true });
+
+  scrapeAll("MANUAL")
+    .then((result) => {
+      scrapeState.lastResult = result;
+      const { notifyAfterSync } = require("./notifier");
+      return notifyAfterSync(result).catch(err => console.error("[NOTIFY]", err));
+    })
+    .catch((err) => {
+      scrapeState.lastError = err.message;
+      console.error("[SCRAPE MANUAL ERROR]", err);
+    })
+    .finally(() => {
+      scrapeState.running = false;
+      scrapeState.finishedAt = new Date().toISOString();
+    });
 });
 
 // ============================================================
