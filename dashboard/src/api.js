@@ -114,7 +114,7 @@ export const api = {
   reglasPlazos: () => get('/reglas-plazos'),
   eventos: (limit = 50) => get(`/eventos?limit=${limit}`),
   eventosHoy: () => get('/eventos/hoy'),
-  actuacionesRecientes: (limit = 30) => get(`/actuaciones/recientes?limit=${limit}`),
+  actuacionesRecientes: (limit = 30, dias = null) => get(`/actuaciones/recientes?${dias ? `dias=${dias}` : `limit=${limit}`}`),
   stats: () => get('/stats'),
   porDia: () => get('/stats/por-dia'),
   porSituacion: () => get('/stats/por-situacion'),

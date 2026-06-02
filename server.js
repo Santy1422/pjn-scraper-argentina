@@ -390,6 +390,10 @@ app.post("/api/expedientes/:id/favorito", (req, res) => {
 // ============================================================
 
 app.get("/api/actuaciones/recientes", (req, res) => {
+  if (req.query.dias) {
+    const dias = parseInt(req.query.dias) || 7;
+    return res.json(q.getActuacionesRecientesPorDias.all(`-${dias}`));
+  }
   const limit = parseInt(req.query.limit) || 30;
   res.json(q.getActuacionesRecientes.all(limit));
 });

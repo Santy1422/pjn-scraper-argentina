@@ -266,6 +266,15 @@ th.sortable:hover{color:var(--text)}
 .dash-section-header h2{font-size:15px;font-weight:600;color:var(--text)}
 .dash-section-header svg{color:var(--text3)}
 .dash-count{font-size:12px;color:var(--text3);margin-left:auto}
+.dash-dias{display:flex;gap:4px;margin-left:10px}
+.dash-dias-btn{padding:4px 10px;font-size:12px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:7px;cursor:pointer;transition:all .15s}
+.dash-dias-btn:hover{border-color:var(--accent);color:var(--accent)}
+.dash-dias-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.dash-pager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px}
+.dash-pager-info{font-size:12px;color:var(--text3)}
+.dash-pager-btn{padding:6px 14px;font-size:12.5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:8px;cursor:pointer;transition:all .15s}
+.dash-pager-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.dash-pager-btn:disabled{opacity:.4;cursor:not-allowed}
 .dash-empty{text-align:center;padding:48px 20px;color:var(--text3)}
 .dash-empty svg{margin-bottom:12px;opacity:.4}
 .dash-empty p{font-size:14px}

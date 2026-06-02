@@ -11,14 +11,23 @@ function timeAgo(iso) {
   return `hace ${Math.floor(diff)}d`;
 }
 
+const PAGE_SIZE = 12;
+
 export default function Dashboard({ setPage, openExpediente }) {
   const [data, setData] = useState(null);
   const [recientes, setRecientes] = useState(null);
+  const [dias, setDias] = useState(7);
+  const [pagina, setPagina] = useState(1);
 
   useEffect(() => {
     api.dashboard().then(setData);
-    api.actuacionesRecientes(100).then(setRecientes);
   }, []);
+
+  useEffect(() => {
+    setRecientes(null);
+    setPagina(1);
+    api.actuacionesRecientes(0, dias).then(setRecientes);
+  }, [dias]);
 
   // Group recientes by expediente
   const grouped = recientes ? Object.values(
@@ -42,6 +51,10 @@ export default function Dashboard({ setPage, openExpediente }) {
       return acc;
     }, {})
   ).sort((a, b) => b.latestDate.localeCompare(a.latestDate)) : null;
+
+  const totalPaginas = grouped ? Math.max(1, Math.ceil(grouped.length / PAGE_SIZE)) : 1;
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = grouped ? grouped.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE) : [];
 
   if (!data) return (
     <div className="fade-in dash">
@@ -93,11 +106,23 @@ export default function Dashboard({ setPage, openExpediente }) {
         <Scale size={16} />
         <h2>Ultimos movimientos</h2>
         <span className="dash-count">{grouped ? `${grouped.length} expedientes` : ''}</span>
+        <div className="dash-dias">
+          {[7, 10].map(d => (
+            <button
+              key={d}
+              className={`dash-dias-btn ${dias === d ? 'active' : ''}`}
+              onClick={() => setDias(d)}
+            >
+              {d} dias
+            </button>
+          ))}
+        </div>
       </div>
 
       {grouped && grouped.length > 0 ? (
+        <>
         <div className="dash-feed">
-          {grouped.slice(0, 40).map(exp => (
+          {visibles.map(exp => (
             <div key={exp.expediente_id} className="feed-card" onClick={() => openExpediente(exp.expediente_id)}>
               <div className="feed-top">
                 <span className="feed-clave">{exp.clave}</span>
@@ -122,10 +147,30 @@ export default function Dashboard({ setPage, openExpediente }) {
             </div>
           ))}
         </div>
+        {totalPaginas > 1 && (
+          <div className="dash-pager">
+            <button
+              className="dash-pager-btn"
+              disabled={paginaActual <= 1}
+              onClick={() => setPagina(p => Math.max(1, p - 1))}
+            >
+              Anterior
+            </button>
+            <span className="dash-pager-info">Pagina {paginaActual} de {totalPaginas}</span>
+            <button
+              className="dash-pager-btn"
+              disabled={paginaActual >= totalPaginas}
+              onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
+        </>
       ) : grouped && grouped.length === 0 ? (
         <div className="dash-empty">
           <Scale size={28} />
-          <p>Sin movimientos recientes</p>
+          <p>Sin movimientos en los ultimos {dias} dias</p>
           <p className="sub">Los expedientes se actualizan automaticamente cada dia</p>
         </div>
       ) : null}

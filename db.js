@@ -406,6 +406,12 @@ const q = {
     FROM actuaciones a JOIN expedientes e ON a.expediente_id = e.id
     ORDER BY a.fecha_iso DESC, a.id DESC LIMIT ?
   `),
+  getActuacionesRecientesPorDias: db.prepare(`
+    SELECT a.*, e.clave, e.caratula, e.situacion, e.dependencia
+    FROM actuaciones a JOIN expedientes e ON a.expediente_id = e.id
+    WHERE a.fecha_iso >= date('now', ? || ' days')
+    ORDER BY a.fecha_iso DESC, a.id DESC
+  `),
 
   // Partes
   insertParte: db.prepare(
