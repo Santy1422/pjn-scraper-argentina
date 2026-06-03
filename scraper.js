@@ -326,6 +326,236 @@ async function scrapeExpedientes(page) {
 // scrapear sus actuaciones desde el SCW
 // ============================================================
 
+// Extrae y guarda las actuaciones (e intervinientes) de la vista de un
+// expediente ya abierta (expediente.seam con #expediente:action-table).
+// Devuelve la cantidad de actuaciones nuevas insertadas.
+async function guardarActuacionesDeVista(page, exp) {
+  // Click "Ver Todos" para ver todas las actuaciones
+  const verTodos = page.locator('text="Ver Todos"').first();
+  if (await verTodos.isVisible().catch(() => false)) {
+    await verTodos.click();
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(2000);
+  }
+
+  // Extraer actuaciones
+  const actuaciones = await page.evaluate(() => {
+    const rows = document.querySelectorAll("#expediente\\:action-table tr");
+    const items = [];
+    rows.forEach((tr, idx) => {
+      if (idx === 0) return;
+      const cells = tr.querySelectorAll("td");
+      if (cells.length < 5) return;
+
+      const linkDescarga = tr.querySelector('a[href*="viewer.seam"][href*="download=true"]');
+      const linkVer = tr.querySelector('a[href*="viewer.seam"]:not([href*="download"])');
+
+      items.push({
+        oficina: cells[1]?.innerText?.replace("Oficina:", "").trim() || null,
+        fecha: cells[2]?.innerText?.replace("Fecha:", "").trim() || null,
+        tipo: cells[3]?.innerText?.replace("Tipo actuacion:", "").trim() || null,
+        detalle: cells[4]?.innerText?.replace("Detalle:", "").trim() || null,
+        fojas: cells[5]?.innerText?.trim() || null,
+        urlDescarga: linkDescarga?.href || null,
+        urlVer: linkVer?.href || null,
+      });
+    });
+    return items;
+  });
+
+  // También extraer intervinientes si existe la tab
+  const tabIntervinientes = page.locator('text="Intervinientes"').first();
+  if (await tabIntervinientes.isVisible().catch(() => false)) {
+    await tabIntervinientes.click();
+    await page.waitForTimeout(2000);
+
+    const partes = await page.evaluate(() => {
+      const items = [];
+      const rows = document.querySelectorAll("[id*='interviniente'] tr, [id*='Interviniente'] tr");
+      rows.forEach(tr => {
+        const cells = tr.querySelectorAll("td");
+        if (cells.length >= 2) {
+          items.push({
+            tipo: cells[0]?.innerText?.trim(),
+            nombre: cells[1]?.innerText?.trim(),
+          });
+        }
+      });
+      if (items.length === 0) {
+        const panel = document.querySelector("[id*='interviniente'], [id*='Interviniente']");
+        if (panel) {
+          items.push({ tipo: "RAW", nombre: panel.innerText.trim().substring(0, 500) });
+        }
+      }
+      return items;
+    });
+
+    if (partes.length > 0) {
+      db.prepare("DELETE FROM partes WHERE expediente_id = ?").run(exp.id);
+      for (const p of partes) {
+        if (p.nombre) {
+          q.insertParte.run(exp.id, p.tipo, p.nombre, null, null);
+        }
+      }
+    }
+  }
+
+  // Guardar actuaciones
+  let nuevasEsteExp = 0;
+  for (const act of actuaciones) {
+    const hash = hashActuacion(exp.id, act.fecha, act.tipo, act.oficina, act.detalle);
+    const result = q.insertActuacion.run(
+      exp.id, act.oficina, act.fecha, fechaToISO(act.fecha),
+      act.tipo, act.detalle, act.fojas, act.urlDescarga, act.urlVer, hash
+    );
+    if (result.changes > 0) nuevasEsteExp++;
+  }
+  console.log(`[ACTUACIONES] ${exp.clave}: ${actuaciones.length} total, ${nuevasEsteExp} nuevas`);
+  return nuevasEsteExp;
+}
+
+// --- Helpers de navegación de la lista paginada del SCW ---
+
+async function irAListaCompleta(page) {
+  await page.goto(
+    "https://scw.pjn.gov.ar/scw/consultaListaRelacionados.seam",
+    { waitUntil: "networkidle", timeout: 60000 }
+  );
+  await page.waitForTimeout(2500);
+  const vt = page.locator("#verTodos a, #verTodos input, text=Ver todos");
+  if (await vt.first().isVisible().catch(() => false)) {
+    await vt.first().click();
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(2500);
+  }
+}
+
+async function clickSiguientePagina(page, currentPage) {
+  const nextLink = page.locator(`a.padding-pagination:has-text("${currentPage + 1}")`).first();
+  if (await nextLink.isVisible().catch(() => false)) {
+    await nextLink.click();
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1500);
+    return true;
+  }
+  const nextBtn = page.locator(".last-page, a:has-text('>>')").first();
+  if (await nextBtn.isVisible().catch(() => false)) {
+    await nextBtn.click();
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1500);
+    return true;
+  }
+  return false;
+}
+
+// Desde la página 1, avanzar hasta la página n. Devuelve true si llegó.
+async function paginarHasta(page, n) {
+  for (let p = 1; p < n; p++) {
+    if (!(await clickSiguientePagina(page, p))) return false;
+  }
+  return true;
+}
+
+// Lee las claves de los expedientes de la página actual, en orden de fila.
+async function leerClavesPagina(page) {
+  return await page.evaluate(() => {
+    const tables = document.querySelectorAll("table");
+    let t = null;
+    for (const tb of tables) {
+      const h = tb.querySelector("tr th, tr td");
+      if (h?.innerText?.includes("Expediente")) { t = tb; break; }
+    }
+    if (!t) return [];
+    const trs = t.querySelectorAll("tbody tr");
+    const rows = trs.length ? Array.from(trs) : Array.from(t.querySelectorAll("tr")).slice(1);
+    return rows
+      .map(tr => {
+        const c = tr.querySelectorAll("td");
+        return c.length >= 5 ? c[0].innerText.replace(/\s+/g, " ").trim() : null;
+      })
+      .filter(Boolean);
+  });
+}
+
+// Recorre TODAS las páginas de la lista y scrapea las actuaciones de cada
+// expediente clickeando su link "visualizar" (postback JSF, sin URL directa).
+// Re-loguea por página para refrescar sesión y acotar memoria.
+async function scrapeActuacionesCompleto() {
+  console.log("[ACTUACIONES] Modo COMPLETO: recorriendo TODOS los expedientes...");
+  let totalNuevas = 0;
+  let procesados = 0;
+  let pageNum = 1;
+  const MAX_PAGINAS = 30;
+
+  while (pageNum <= MAX_PAGINAS) {
+    let browser;
+    try {
+      const auth = await loginYObtenerContexto();
+      browser = auth.browser;
+      const page = auth.page;
+
+      await irAListaCompleta(page);
+      if (!(await paginarHasta(page, pageNum))) {
+        console.log(`[ACTUACIONES] No se pudo llegar a la página ${pageNum}, fin del recorrido`);
+        break;
+      }
+
+      const claves = await leerClavesPagina(page);
+      if (claves.length === 0) {
+        console.log(`[ACTUACIONES] Página ${pageNum} sin filas, fin del recorrido`);
+        break;
+      }
+      console.log(`[ACTUACIONES] Página ${pageNum}: ${claves.length} expedientes`);
+
+      for (let i = 0; i < claves.length; i++) {
+        const claveRaw = claves[i];
+        const exp =
+          q.getExpedienteByClave.get(normalizarClave(claveRaw)) ||
+          q.getExpedienteByClave.get(claveRaw);
+        if (!exp) continue;
+
+        try {
+          // Asegurar que la lista está renderizada en la página correcta
+          let links = page.locator('a[title*="visualizar"], a:has-text("visualizar")');
+          if ((await links.count()) <= i) {
+            await irAListaCompleta(page);
+            await paginarHasta(page, pageNum);
+            links = page.locator('a[title*="visualizar"], a:has-text("visualizar")');
+          }
+
+          await links.nth(i).click();
+          await page.waitForTimeout(3500);
+
+          const actionTable = await page.$("#expediente\\:action-table, [id*='action-table']");
+          if (actionTable) {
+            totalNuevas += await guardarActuacionesDeVista(page, exp);
+            procesados++;
+          }
+
+          // Volver a la lista para el siguiente; si falla, se re-navega arriba
+          await page.goBack({ waitUntil: "networkidle" }).catch(() => {});
+          await page.waitForTimeout(1500);
+        } catch (err) {
+          console.error(`[ACTUACIONES] Error ${claveRaw}:`, err.message);
+          if (err.message.includes("closed") || err.message.includes("Target page")) break;
+          await irAListaCompleta(page).catch(() => {});
+          await paginarHasta(page, pageNum).catch(() => {});
+        }
+      }
+
+      pageNum++;
+    } catch (err) {
+      console.error(`[ACTUACIONES COMPLETO] Error página ${pageNum}:`, err.message);
+      pageNum++;
+    } finally {
+      if (browser) await browser.close().catch(() => {});
+    }
+  }
+
+  console.log(`[ACTUACIONES] COMPLETO: ${procesados} expedientes, ${totalNuevas} actuaciones nuevas total`);
+  return totalNuevas;
+}
+
 async function scrapeActuaciones(_ignoredPage, limit = 20) {
   // Scrapear actuaciones por prioridad (NO al azar, para no dejar afuera
   // expedientes con actividad reciente):
@@ -409,88 +639,7 @@ async function scrapeActuaciones(_ignoredPage, limit = 20) {
             continue;
           }
 
-          // Click "Ver Todos" para ver todas las actuaciones
-          const verTodos = page.locator('text="Ver Todos"').first();
-          if (await verTodos.isVisible().catch(() => false)) {
-            await verTodos.click();
-            await page.waitForLoadState("networkidle");
-            await page.waitForTimeout(2000);
-          }
-
-          // Extraer actuaciones
-          const actuaciones = await page.evaluate(() => {
-            const rows = document.querySelectorAll("#expediente\\:action-table tr");
-            const items = [];
-            rows.forEach((tr, idx) => {
-              if (idx === 0) return;
-              const cells = tr.querySelectorAll("td");
-              if (cells.length < 5) return;
-
-              const linkDescarga = tr.querySelector('a[href*="viewer.seam"][href*="download=true"]');
-              const linkVer = tr.querySelector('a[href*="viewer.seam"]:not([href*="download"])');
-
-              items.push({
-                oficina: cells[1]?.innerText?.replace("Oficina:", "").trim() || null,
-                fecha: cells[2]?.innerText?.replace("Fecha:", "").trim() || null,
-                tipo: cells[3]?.innerText?.replace("Tipo actuacion:", "").trim() || null,
-                detalle: cells[4]?.innerText?.replace("Detalle:", "").trim() || null,
-                fojas: cells[5]?.innerText?.trim() || null,
-                urlDescarga: linkDescarga?.href || null,
-                urlVer: linkVer?.href || null,
-              });
-            });
-            return items;
-          });
-
-          // También extraer intervinientes si existe la tab
-          const tabIntervinientes = page.locator('text="Intervinientes"').first();
-          if (await tabIntervinientes.isVisible().catch(() => false)) {
-            await tabIntervinientes.click();
-            await page.waitForTimeout(2000);
-
-            const partes = await page.evaluate(() => {
-              const items = [];
-              const rows = document.querySelectorAll("[id*='interviniente'] tr, [id*='Interviniente'] tr");
-              rows.forEach(tr => {
-                const cells = tr.querySelectorAll("td");
-                if (cells.length >= 2) {
-                  items.push({
-                    tipo: cells[0]?.innerText?.trim(),
-                    nombre: cells[1]?.innerText?.trim(),
-                  });
-                }
-              });
-              if (items.length === 0) {
-                const panel = document.querySelector("[id*='interviniente'], [id*='Interviniente']");
-                if (panel) {
-                  items.push({ tipo: "RAW", nombre: panel.innerText.trim().substring(0, 500) });
-                }
-              }
-              return items;
-            });
-
-            if (partes.length > 0) {
-              db.prepare("DELETE FROM partes WHERE expediente_id = ?").run(exp.id);
-              for (const p of partes) {
-                if (p.nombre) {
-                  q.insertParte.run(exp.id, p.tipo, p.nombre, null, null);
-                }
-              }
-            }
-          }
-
-          // Guardar actuaciones
-          let nuevasEsteExp = 0;
-          for (const act of actuaciones) {
-            const hash = hashActuacion(exp.id, act.fecha, act.tipo, act.oficina, act.detalle);
-            const result = q.insertActuacion.run(
-              exp.id, act.oficina, act.fecha, fechaToISO(act.fecha),
-              act.tipo, act.detalle, act.fojas, act.urlDescarga, act.urlVer, hash
-            );
-            if (result.changes > 0) nuevasEsteExp++;
-          }
-          totalNuevas += nuevasEsteExp;
-          console.log(`[ACTUACIONES] ${exp.clave}: ${actuaciones.length} total, ${nuevasEsteExp} nuevas`);
+          totalNuevas += await guardarActuacionesDeVista(page, exp);
 
           await page.waitForTimeout(1500 + Math.random() * 1000);
         } catch (err) {
@@ -576,7 +725,7 @@ async function descargarPDFs(page, token, limit = 50) {
 let scrapeRunning = false;
 function isScraping() { return scrapeRunning; }
 
-async function scrapeAll(tipo = "MANUAL") {
+async function scrapeAll(tipo = "MANUAL", opts = {}) {
   if (scrapeRunning) {
     console.log("[SCRAPE] Ya hay un scrape en curso — se omite esta corrida");
     return { skipped: true, eventosNuevos: 0, expedientesActualizados: 0, actuacionesNuevas: 0, pdfsDescargados: 0, errores: 0 };
@@ -629,10 +778,15 @@ async function scrapeAll(tipo = "MANUAL") {
     }
 
     // Phase 2: Actuaciones - manages its own browsers in batches.
-    // Sync manual trae mucho más (el usuario está esperando); el cron rota liviano.
+    // opts.full → recorre TODOS los expedientes (lento, 1x/día).
+    // Si no, sync manual trae 80 por prioridad; el cron rota liviano (20).
     try {
-      const limitActuaciones = tipo === "MANUAL" ? 80 : 20;
-      actuacionesNuevas = await scrapeActuaciones(null, limitActuaciones);
+      if (opts.full) {
+        actuacionesNuevas = await scrapeActuacionesCompleto();
+      } else {
+        const limitActuaciones = tipo === "MANUAL" ? 80 : 20;
+        actuacionesNuevas = await scrapeActuaciones(null, limitActuaciones);
+      }
       detalles.push({ paso: "actuaciones", ok: true, nuevas: actuacionesNuevas });
     } catch (err) {
       errores++;
@@ -683,4 +837,4 @@ if (require.main === module) {
   scrapeAll("MANUAL").then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { scrapeAll, getCredentials, isScraping };
+module.exports = { scrapeAll, getCredentials, isScraping, scrapeActuacionesCompleto };
